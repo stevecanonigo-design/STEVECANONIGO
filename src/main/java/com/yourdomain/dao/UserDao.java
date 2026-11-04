@@ -184,6 +184,26 @@ public class UserDao {
         }
     }
 
+    /**
+     * Updates BOTH the role and the status of one user in a single statement.
+     * Inputs are converted to upper case before they reach the database.
+     * Returns true only if a row was updated.
+     */
+    public boolean updateUserRoleAndStatus(int userId, String newRole, String newStatus) {
+        // Table is "users", columns are "role" / "status" / "user_id" in this project.
+        String sql = "UPDATE users SET role = ?, status = ? WHERE user_id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, newRole.toUpperCase());
+            ps.setString(2, newStatus.toUpperCase());
+            ps.setInt(3, userId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.out.println("Database error while updating user: " + e.getMessage());
+            return false;
+        }
+    }
+
     /** Returns the number of users with this role, or -1 on error. */
     public int countByRole(String role) {
         String sql = "SELECT COUNT(*) FROM users WHERE role = ?";

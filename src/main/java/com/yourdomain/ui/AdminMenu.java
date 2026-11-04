@@ -33,6 +33,7 @@ public class AdminMenu {
             System.out.println("3. Review Pending Accounts (Approve / Reject)");
             System.out.println("4. Create Account");
             System.out.println("5. Delete Account");
+            System.out.println("6. Update User Role / Status");
             System.out.println("0. Logout");
             System.out.println(DOUBLE_LINE);
             System.out.print("Enter choice: ");
@@ -44,8 +45,9 @@ public class AdminMenu {
                 case "3" -> reviewPendingAccounts();
                 case "4" -> createAccount();
                 case "5" -> deleteAccount();
+                case "6" -> updateUser();
                 case "0" -> { return; }
-                default -> System.out.println("\nERROR: Invalid choice. Enter 1-5 or 0.");
+                default -> System.out.println("\nERROR: Invalid choice. Enter 1-6 or 0.");
             }
         }
     }
@@ -230,6 +232,121 @@ public class AdminMenu {
             }
         } else {
             System.out.println("\nNo changes were made.");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // UPDATE USER ROLE / STATUS  (enter 0 at any step to cancel)
+    // ------------------------------------------------------------------
+    private void updateUser() {
+        List<User> all = userDao.getAllUsers();
+        printUserTable("UPDATE USER ROLE / STATUS", all, "No registered users found.");
+        if (all.isEmpty()) {
+            return;
+        }
+
+        int targetUserId = readIntInput("Enter User ID to update (0 to cancel): ");
+        if (targetUserId == 0) {
+            System.out.println("\nUpdate cancelled. No changes were made.");
+            return;
+        }
+
+        // Self-edit restriction: the logged-in admin cannot change their own account.
+        if (targetUserId == admin.userId()) {
+            System.out.println("\nWARNING: Modifying the currently active admin account is restricted.");
+            return;
+        }
+
+        Optional<User> target = userDao.findById(targetUserId);
+        if (target.isEmpty()) {
+            System.out.println("\nERROR: User ID " + targetUserId + " does not exist.");
+            return;
+        }
+        User user = target.get();
+        System.out.println("\nSelected: " + user.username() + " (" + user.name() + ")"
+                + " | Role: " + user.role() + " | Status: " + user.status());
+
+        String newRole = readValidRole();
+        if (newRole == null) {
+            System.out.println("\nUpdate cancelled. No changes were made.");
+            return;
+        }
+        String newStatus = readValidStatus();
+        if (newStatus == null) {
+            System.out.println("\nUpdate cancelled. No changes were made.");
+            return;
+        }
+
+        if (userDao.updateUserRoleAndStatus(targetUserId, newRole, newStatus)) {
+            userDao.logActivity(admin.userId(), "Updated user ID " + targetUserId
+                    + " to role " + newRole + ", status " + newStatus);
+            System.out.println("\nSUCCESS: User '" + user.username() + "' updated.");
+            System.out.println("Role:   " + user.role() + " -> " + newRole);
+            System.out.println("Status: " + user.status() + " -> " + newStatus);
+        } else {
+            System.out.println("\nERROR: Could not update the user. No changes were made.");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // INPUT VALIDATION WRAPPERS
+    // ------------------------------------------------------------------
+
+    /** Keeps asking until the person types a whole number. Never crashes on letters/symbols. */
+    private int readIntInput(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            if (!scanner.hasNextLine()) {
+                return 0; // input closed: treat as cancel
+            }
+            String input = scanner.nextLine().trim();
+            try {
+                return Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("ERROR: Invalid input. Please enter a number (digits only).");
+            }
+        }
+    }
+
+    /**
+     * Keeps asking until a valid role is typed. Returns null if the admin enters 0 (cancel).
+     * Valid roles: CUSTOMER, CAFE_STAFF, ADMIN.
+     */
+    private String readValidRole() {
+        while (true) {
+            System.out.print("Enter new role (CUSTOMER / CAFE_STAFF / ADMIN, 0 to cancel): ");
+            if (!scanner.hasNextLine()) {
+                return null;
+            }
+            String input = scanner.nextLine().trim().toUpperCase();
+            if (input.equals("0")) {
+                return null;
+            }
+            if (input.equals(User.ROLE_CUSTOMER) || input.equals(User.ROLE_STAFF)
+                    || input.equals(User.ROLE_ADMIN)) {
+                return input;
+            }
+            System.out.println("ERROR: Invalid role '" + input + "'. Choose CUSTOMER, CAFE_STAFF, or ADMIN.");
+        }
+    }
+
+    /**
+     * Keeps asking until a valid status is typed. Returns null if the admin enters 0 (cancel).
+     * APPROVED is stored as ACTIVE, because ACTIVE is the status this system uses to allow login.
+     */
+    private String readValidStatus() {
+        while (true) {
+            System.out.print("Enter new status (APPROVED / PENDING, 0 to cancel): ");
+            if (!scanner.hasNextLine()) {
+                return null;
+            }
+            String input = scanner.nextLine().trim().toUpperCase();
+            switch (input) {
+                case "0" -> { return null; }
+                case "APPROVED" -> { return User.STATUS_ACTIVE; }
+                case "PENDING" -> { return User.STATUS_PENDING; }
+                default -> System.out.println("ERROR: Invalid status '" + input + "'. Choose APPROVED or PENDING.");
+            }
         }
     }
 
